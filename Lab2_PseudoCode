@@ -1,0 +1,116 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;     Embedded Systems ~ Spring 2016		;
+;     Armond Luthens, Charles Rathe			;
+;     Lab 2 ~ LED Timer						;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+.include "tn45def.inc"		; Include instruction definition
+.cseg						; Start code segment
+.org 0						; SRAM starts at memory location 0
+
+
+; Alias registers
+
+.def STATE=r16  ; Register 16 holds state
+
+
+
+; Configure input and output pins for microcontroller (4 output, 1 input)
+
+sbi DDRB, 0		; SDI Data in to IC's
+sbi DDRB, 1		; CLK input to IC's
+sbi DDRB, 2     ; Latch to IC's
+sbi DDRB, 3		; ~OE to IC's (same)
+cbi DDRB, 4		; Input from push button -> Used to check if button pressed (hardware debounced)
+
+
+
+; Configure/Set up timer 
+	; TO DO 
+	; (Includes prescaler, set max?, etc -- Read up on this)
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;
+;	Main Program	;
+;;;;;;;;;;;;;;;;;;;;;
+
+main:
+	; Check button, if pressed -> jump to button pressed function
+	; if not pressed -> loop
+rjmp main
+
+
+
+
+;;;;;;;;;;;;;;;;;
+;	Interupts	;
+;;;;;;;;;;;;;;;;;
+
+; Timer Interrupt for when timer rolls over
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;	Display Functions	;
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+freeze_display:
+
+ret
+
+clear_display:
+
+ret
+
+blink_max:
+
+ret
+
+;;;;;;;;;;;;;;;;;;;;;;
+;	Timer Functions	 ;
+;;;;;;;;;;;;;;;;;;;;;;
+
+start_timer:
+
+ret
+
+stop_timer:
+
+ret
+
+clear_timer:
+
+ret
+
+timer_overflowed:
+
+	; Possiby do not need, can put logic in interrupt ;
+
+ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;	Button Functions	;
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+check_button:
+
+ret
+
+
+button_pressed:
+
+	; TO DO -- Big function, must check what state is then respond accordingly ;
+ret
+
+;;;;;;;;;;;;;
+;	Delays	;
+;;;;;;;;;;;;;
+
+post_button_delay:
+
+	; After button is pressed, need to delay so that button cannot be held down and it will just keep resetting it super fast
+	; May fool around with this timing, seems maybe ~100 ms might be good so you can stop it at .1 s if you want
+
+ret
