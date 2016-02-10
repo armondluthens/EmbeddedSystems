@@ -1,12 +1,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;     Embedded Systems ~ Spring 2016	    ;
-;     Armond Luthens, Charles Rathe			;
-;     Lab 2 ~ LED Timer						;
+;     Armond Luthens, Charles Rathe	    ;
+;     Lab 2 ~ LED Timer			    ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 .include "tn45def.inc"		; Include instruction definition
-.cseg						; Start code segment
-.org 0						; SRAM starts at memory location 0
+.cseg				; Start code segment
+.org 0				; SRAM starts at memory location 0
 
 
 ; Alias registers
@@ -19,7 +19,7 @@
 
 sbi DDRB, 0		; SDI Data in to IC's
 sbi DDRB, 1		; CLK input to IC's
-sbi DDRB, 2     ; Latch to IC's
+sbi DDRB, 2     	; Latch to IC's
 sbi DDRB, 3		; ~OE to IC's (same)
 cbi DDRB, 4		; Input from push button -> Used to check if button pressed (hardware debounced)
 
@@ -33,7 +33,7 @@ cbi DDRB, 4		; Input from push button -> Used to check if button pressed (hardwa
 
 
 ;;;;;;;;;;;;;;;;;;;;;
-;	Main Program	;
+;   Main Program    ;
 ;;;;;;;;;;;;;;;;;;;;;
 
 main:
@@ -45,7 +45,7 @@ rjmp main
 
 
 ;;;;;;;;;;;;;;;;;
-;	Interupts	;
+;   Interupts	;
 ;;;;;;;;;;;;;;;;;
 
 ; Timer Interrupt for when timer rolls over
@@ -53,7 +53,7 @@ rjmp main
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
-;	Display Functions	;
+;   Display Functions	;
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 
 freeze_display:
@@ -69,7 +69,7 @@ blink_max:
 ret
 
 ;;;;;;;;;;;;;;;;;;;;;;
-;	Timer Functions	 ;
+;  Timer Functions   ;
 ;;;;;;;;;;;;;;;;;;;;;;
 
 start_timer:
@@ -91,7 +91,7 @@ timer_overflowed:
 ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
-;	Button Functions	;
+;    Button Functions   ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 
 check_button:
@@ -105,7 +105,7 @@ button_pressed:
 ret
 
 ;;;;;;;;;;;;;
-;	Delays	;
+;   Delays  ;
 ;;;;;;;;;;;;;
 
 post_button_delay:
