@@ -1,0 +1,53 @@
+          A
+    -------------
+F   |           | B
+    |     G     |
+    -------------
+E   |           | C
+    |     D     |
+    -------------
+
+OUT 0 ----------- E -- Pin #1
+OUT 1 ----------- D -- Pin #2
+OUT 2 ----------- C -- Pin #4
+OUT 3 ----------- DECIMAL PLACE -- Pin #5
+OUT 4 ----------- B -- Pin #6
+OUT 5 ----------- A -- Pin #7
+OUT 6 ----------- F -- Pin #9
+OUT 7 ----------- G -- Pin #10
+VDD   ----------- VCC -- Pin #8
+GND   ----------- GND -- Pin #3
+
+PB0 --- SDI
+PB1 --- CLK
+PB2 --- LE
+PB3 --- Pushbutton Input
+PB4 --- OE
+
+NEED: 2 1.9k OHM RESISTOR FROM Rext to ground
+
+----------------------------------------------------------------------
+
+0: {OUT 0, OUT 1, OUT 2, OUT 3, OUT 4, OUT 5, OUT 6}
+1: {OUT 2, OUT 3, OUT 4}
+2: {OUT 0, OUT 1, OUT 3, OUT 4, OUT 5, OUT 7}
+3: {OUT 1, OUT 2, OUT 3, OUT 4, OUT 5, OUT 7}
+4: {OUT 2, OUT 3, OUT 4, OUT 6, OUT 7}
+5: {OUT 1, OUT 2, OUT 3, OUT 5, OUT 6, OUT 7}
+6: {OUT 0, OUT 1, OUT 2, OUT 3, OUT 5, OUT 6, OUT 7}
+7: {OUT 2, OUT 3, OUT 4, OUT 5}
+8: {OUT 0, OUT 1, OUT 2, OUT 3, OUT 4, OUT 5, OUT 6, OUT 7}
+9: {OUT 2, OUT 3, OUT 4, OUT 5, OUT 6, OUT 7}
+
+----------------------------------------------------------------------
+Binary Number Representations
+0: 11111110
+1:
+2:
+3:
+4:
+5:
+6:
+7:
+8:
+9:
