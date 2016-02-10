@@ -20,8 +20,8 @@
 sbi DDRB, 0		; SDI Data in to IC's
 sbi DDRB, 1		; CLK input to IC's
 sbi DDRB, 2     	; Latch to IC's
-sbi DDRB, 3		; ~OE to IC's (same)
-cbi DDRB, 4		; Input from push button -> Used to check if button pressed (hardware debounced)
+sbi DDRB, 4		; ~OE to IC's (same)
+cbi DDRB, 3		; Input from push button -> Used to check if button pressed (hardware debounced)
 
 
 
