@@ -8,12 +8,32 @@
 .cseg				; Start code segment
 .org 0				; SRAM starts at memory location 0
 
-
 ; Alias registers
 
-.def STATE=r16  ; Register 16 holds state
+.def STATE=r16    ; Register 16 holds state
 
+	; STATE(0) is Timer frozen at zero
+	; STATE(1) is Timer is going
+	; STATE(2) is Timer is frozen
+	; STATE(3) is Timer blinking at 9.9
+	; See state diagram
+	
+.def TBT=r17      ; To be translated (hex)
+.def TEMP=r18     ; Binary to be pushed
+.def TMR_CNT=r19  ; keeps track of timer
 
+; Define number codes (Do port binary here)
+
+.def ZERO = 
+.def ONE = 
+.def TWO
+.def THREE = 
+.def FOUR = 
+.def FIVE = 
+.def SIX =
+.def SEVEN = 
+.def EIGHT = 
+.def NINE = 
 
 ; Configure input and output pins for microcontroller (4 output, 1 input)
 
@@ -28,8 +48,11 @@ cbi DDRB, 3		; Input from push button -> Used to check if button pressed (hardwa
 ; Configure/Set up timer 
 	; TO DO 
 	; (Includes prescaler, set max?, etc -- Read up on this)
+	; Set up prescaler plus overflow cap so that TIMER overflows at 100ms
 
+; Set initial values
 
+ldi STATE, 0   ; The timer starts at state 0
 
 
 ;;;;;;;;;;;;;;;;;;;;;
@@ -39,6 +62,7 @@ cbi DDRB, 3		; Input from push button -> Used to check if button pressed (hardwa
 main:
 	; Check button, if pressed -> jump to button pressed function
 	; if not pressed -> loop
+	check_button
 rjmp main
 
 
@@ -50,6 +74,16 @@ rjmp main
 
 ; Timer Interrupt for when timer rolls over
 
+	; check if TIMER_CNT is at 99
+	; if it is, STATE = 3, TIMER_CNT = 0
+	; go to blink function
+	
+	; if not go to change_leds function
+	
+	; make sure to reset registers you need to
+	rcall change_LEDs
+ret
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -57,37 +91,51 @@ rjmp main
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 
 freeze_display:
-
+	; Stops timer, display frozen at TMR_CNT
+	; STATE should be at 2 the whole time
 ret
 
-clear_display:
-
+clear_display:			
+	; To be used in button interrupt, takes display and puts it to zero
 ret
 
 blink_max:
-
+	; Blink LED until button pressed, STATE should be at 3 throughout this whole thing, should jump straight back to loop
 ret
 
+change_leds:
+	addi TMR_CNT, 1
+	
+	; Make OE high?
+	; Load first digit of TMR_CNT into TBT
+	rjmp translate_to_binary    ; stores first digit as binary output in TEMP
+	rjmp push_to_leds           ; pushes first digit to LED's using CLK and LE (not sure how yet)
+	; Load second digit of TMR_CNT into TBT
+	rjmp translate_to_binary    ; stores second digit as binary output in TEMP
+	rjmp push_to_leds           ; pushes second digit to LED's using CLK and LE
+	
+	pull_OE_low                 ; sends to display
+ret
+
+translate_to_binary:
+	; depending on digit, store binary port representation in TEMP
+ret
+
+push_to_LEDs:
+	; FUCK if I know
+ret
+
+	
 ;;;;;;;;;;;;;;;;;;;;;;
 ;  Timer Functions   ;
 ;;;;;;;;;;;;;;;;;;;;;;
 
 start_timer:
-
+	; Probably just have to change Timer registers, for use in button_pressed function
 ret
 
 stop_timer:
-
-ret
-
-clear_timer:
-
-ret
-
-timer_overflowed:
-
-	; Possiby do not need, can put logic in interrupt ;
-
+	; --^
 ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -95,7 +143,7 @@ ret
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 
 check_button:
-
+	; shows how to do in slides, check if PB3 is high?
 ret
 
 
@@ -114,3 +162,4 @@ post_button_delay:
 	; May fool around with this timing, seems maybe ~100 ms might be good so you can stop it at .1 s if you want
 
 ret
+
