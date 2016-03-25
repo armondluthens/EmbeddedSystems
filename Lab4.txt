@@ -1,0 +1,233 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;        Lab 4 - Simple Multimeter       ;
+;    Armond Luthens and Charles Rathe    ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+.include "m88padef.inc"      ; Include definitions for bigger board
+
+.cseg
+
+;-----------------------------------;
+; ISR Vector Table                  ;
+;-----------------------------------;
+.org 0x0000                         ;
+	rjmp RESET    ; Reset ISR       ;
+;-----------------------------------;
+.org 0x0001                         ;
+	rjmp BUTTON   ; INT Button ISR  ;
+;-----------------------------------;
+.org 0x0005                         ;
+	rjmp TIMER    ; TMR_OVF ISR     ;
+;-----------------------------------;
+
+
+
+RESET:
+
+; Register Aliasing
+;-----------------------
+
+	.def STATE = r16    ; Register to hold if it's voltage or frequency state (0 is voltage, 1 is freq)
+	.def TMP = r17      ; Register for holding temporary variables
+	.def OUTPUT = r18   ; Stores either voltage or frequency to output
+	.def CHAR = r19     ; Holds character to send to LCD
+
+; Messages in static memory
+;--------------------------------
+
+; Note these have to be even number of characters, including 0x00 (stop character)
+
+volt_msg: .db "Voltmeter", 0x00
+
+freq_msg: .db "Frequency Meter", 0x00
+
+volt_bot: .db "Volt=", 0x00
+
+freq_bot: .db "Freq=", 0x00
+
+volt_units: .db "V", 0x00
+			
+freq_units: .db "kHz", 0x00
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                   Initialization                                    ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Configure I/O
+;-----------------------------------------------------
+
+	ldi TMP, 0xF	; PC0-PC3 is output (Data Lines)
+	out DDRC, TMP
+
+	ldi TMP, 0x38   ; PB3-PB5 is output (Enable/RS) -> We may only need two of these because R/W is always write for us
+	out DDRB, TMP   ; At this point I'm thinking PB3 is RS and PB4 is Enable
+
+	; So check it out, the way this works, we set ADMUX register to make 5V the VRef (VCC)
+	; And then just use division to figure out what the voltage is between 5V and 0V
+
+	ldi TMP, 0x40 ; Setting the REF1, REF0 to be 01 (Setting VREF to VCC)
+	out ADMUX, TMP
+
+	; Fuck there is also a register for turning ADC on and interrupting while it is doing it's thing
+	; Aww shit
+
+; Initial Values
+;--------------------
+	
+	ldi STATE, 0x00   ; Arbitrarily start in voltage mode
+
+; Initialize LCD and Timers
+;-----------------------------
+	rcall LCD_init  ; Initialize LCD
+
+	rcall initialize_timer
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                       Main Loop                                     ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+main:
+	; Do nothing but wait for overflows (I think this will be empty)
+	rjmp main
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                   Timer Functions                                   ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+initialize_timer:
+
+	ret
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                  Interrupt Functions                                ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;---------------------
+; Button Interrupt
+;---------------------------------------------------------------------------
+
+BUTTON:				; Uhh pretty sure we just have to change the state to Freqency and the timer interrupt will do the rest
+	STATE = 0x1
+	reti
+
+;--------------------
+; Timer Interrupt
+;----------------------------------------------------------------------------
+
+TIMER    
+
+	; Sounds like this will be the 0.5 s check in, has to be 16 bit timer so we will see what
+	; prescaling we need and stuff. According to the Writeup it should update screen every 0.5s
+
+	; SO :
+	;	 - Stop interrupts
+	;    - Check if it is Voltage or Frequency
+	;    - If voltage, analyze voltage, output to screen (Probably need some crazy functions for converting to output)
+	;    - If frequency, analyze the frequency somehow and output it to screen (same thing, dunno how yet)
+	;    - Reset Timer, clear flag, and re-enable interrupts
+	;
+
+
+	cli
+	cpi STATE, 0x0      ; Check which state it's in, depending on which one, store voltage or frequency to be outputted
+	breq get_voltage
+	rcall get_frequency
+
+	output:				; So this function will take whatever is in "OUTPUT" and output it to screen.
+						; Going to need to output "Voltage = " and "V" if voltage
+						; Going to need to output "Freq = " and "kHz" if frequency
+						; Probably can do this with compares honestly
+
+
+	sei
+
+	reti
+
+
+
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                   LCD   Functions                                   ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+LCD_init:
+
+
+	ret
+;-------------------------------------------------------------------------------------
+
+send_character:
+	swap CHAR          ; Send High Nibble to LCD
+	out PORTC, CHAR    
+	rcall strobe_lcd
+	rcall strobe_delay
+	swap CHAR          ; Swap and send Low Nibble to LCD
+	out PORTC, CHAR
+	rcall strobe_lcd
+	rcall strobe_delay
+	ret
+
+;---------------------------------------------------------------------------------------
+top_line:                 ; Sets the top line of the LCD
+
+	; NOTE: we probably need to make sure screen is initialized in a certain way before this
+
+	cpi STATE, 0x0        ; If in voltage state, set top line as "voltmeter"
+	breq load_voltage     ; Otherwise set it to "Frequency Meter"
+	rcall load_freq
+
+send_string:
+	lpm                   ; Load string from program memory
+	tst r0                ; Check if the string has reached the terminating char ("string" , 0x00 <--)
+	breq done
+	swap r0               ; Prepare and send high nibble
+	out PORTC, r0        
+	rcall strobe_lcd
+	rcall delay_100
+	swap r0               ; Prepare and send low nibble
+	out PORTC, r0
+	rcall strobe_lcd
+	rcall delay_100
+	rjmp send_string
+done:
+	ret
+
+
+load_voltage:				    ; Loads the voltage string from static memory
+	ldi r30, LOW(2*volt_msg)
+	ldi r31, 2*HIGH(volt_msg)
+	rjmp send_string
+
+load_freq:                      ; Loads the frequency string from static memory
+	ldi r30, LOW(2*freq_msg)
+	ldi r31, 2*HIGH(freq_msg)
+	ret
+
+; Control Line Functions
+;--------------------------------------------------------------------------------
+
+strobe_lcd:
+	sbi PORTB, 4
+	rcall delay_40_micro  
+	cbi PORTB, 4
+	ret
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                  Delays/Helpers                                     ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+delay_100:
+	ret
+
+delay_40_micro:
+	ret
