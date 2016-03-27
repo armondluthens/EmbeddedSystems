@@ -4,6 +4,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 .include "m88padef.inc"      ; Include definitions for bigger board
+.dseg
+	dtxt: .DB 0x00,0x00,0x00,0x00,0x00,0x00
 
 .cseg
 
@@ -20,17 +22,27 @@
 	rjmp TIMER    ; TMR_OVF ISR     ;
 ;-----------------------------------;
 
-
-
 RESET:
 
 ; Register Aliasing
 ;-----------------------
 
+	.def STRLEN = r13	; Stores length of string
+	.def OUTPUT = r14   ; Stores either voltage or frequency to output
+	.def CHAR = r15     ; Holds character to send to LCD
 	.def STATE = r16    ; Register to hold if it's voltage or frequency state (0 is voltage, 1 is freq)
 	.def TMP = r17      ; Register for holding temporary variables
-	.def OUTPUT = r18   ; Stores either voltage or frequency to output
-	.def CHAR = r19     ; Holds character to send to LCD
+
+	.def drem16uL = r18 ; Registers for division
+	.def drem16uH = r19
+	.def dres16uL = r20
+	.def dres16uH = r21
+	.def dd16uL = r22
+	.def dd16uH = r23
+	.def dv16uL = r24
+	.def dv16uH = r25
+	.def dcnt16u =r26
+
 
 ; Messages in static memory
 ;--------------------------------
@@ -39,11 +51,11 @@ RESET:
 
 volt_msg: .db "Voltmeter", 0x00
 
-freq_msg: .db "Frequency Meter", 0x00
+freq_msg: .db "Frequency", 0x00
 
-volt_bot: .db "Volt=", 0x00
+volt_bot: .db "V =", 0x00
 
-freq_bot: .db "Freq=", 0x00
+freq_bot: .db "F =", 0x00
 
 volt_units: .db "V", 0x00
 			
@@ -78,9 +90,9 @@ freq_units: .db "kHz", 0x00
 
 ; Initialize LCD and Timers
 ;-----------------------------
-	rcall LCD_init  ; Initialize LCD
+	rcall LCD_Init  ; Initialize LCD
 
-	rcall initialize_timer
+	rcall Timer_Init
 
 
 
@@ -89,7 +101,7 @@ freq_units: .db "kHz", 0x00
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 main:
-	; Do nothing but wait for overflows (I think this will be empty)
+	; Do nothing but wait for overflows
 	rjmp main
 
 
@@ -97,7 +109,7 @@ main:
 ;                                   Timer Functions                                   ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-initialize_timer:
+Timer_Init:
 
 	ret
 
@@ -120,30 +132,24 @@ BUTTON:				; Uhh pretty sure we just have to change the state to Freqency and th
 ; Timer Interrupt
 ;----------------------------------------------------------------------------
 
-TIMER    
-
-	; Sounds like this will be the 0.5 s check in, has to be 16 bit timer so we will see what
-	; prescaling we need and stuff. According to the Writeup it should update screen every 0.5s
-
-	; SO :
-	;	 - Stop interrupts
-	;    - Check if it is Voltage or Frequency
-	;    - If voltage, analyze voltage, output to screen (Probably need some crazy functions for converting to output)
-	;    - If frequency, analyze the frequency somehow and output it to screen (same thing, dunno how yet)
-	;    - Reset Timer, clear flag, and re-enable interrupts
-	;
-
+TIMER:   
 
 	cli
-	cpi STATE, 0x0      ; Check which state it's in, depending on which one, store voltage or frequency to be outputted
+
+	rcall LCD_init
+
+	cpi STATE, 0x0        ; If in voltage state, set top line as "voltmeter"
+	breq load_voltage     ; Otherwise set it to "Frequency Meter"
+	rcall load_freq
+
+	cpi STATE, 0x0        ; Check which state it's in, depending on which one, store voltage or frequency to be outputted
 	breq get_voltage
 	rcall get_frequency
 
-	output:				; So this function will take whatever is in "OUTPUT" and output it to screen.
-						; Going to need to output "Voltage = " and "V" if voltage
-						; Going to need to output "Freq = " and "kHz" if frequency
-						; Probably can do this with compares honestly
 
+	ldi r30,LOW(dtxt)      ; Load Z register low
+    ldi r31,HIGH(dtxt)     ; Load Z register high
+    rcall displayDstring
 
 	sei
 
@@ -159,65 +165,99 @@ TIMER
 ;                                   LCD   Functions                                   ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-LCD_init:
+LCD_Init:
 
 
 	ret
 ;-------------------------------------------------------------------------------------
 
-send_character:
-	swap CHAR          ; Send High Nibble to LCD
-	out PORTC, CHAR    
-	rcall strobe_lcd
-	rcall strobe_delay
-	swap CHAR          ; Swap and send Low Nibble to LCD
-	out PORTC, CHAR
-	rcall strobe_lcd
-	rcall strobe_delay
+DisplayVoltage:
+
+
+
 	ret
 
 ;---------------------------------------------------------------------------------------
-top_line:                 ; Sets the top line of the LCD
 
-	; NOTE: we probably need to make sure screen is initialized in a certain way before this
-
-	cpi STATE, 0x0        ; If in voltage state, set top line as "voltmeter"
-	breq load_voltage     ; Otherwise set it to "Frequency Meter"
-	rcall load_freq
-
-send_string:
-	lpm                   ; Load string from program memory
-	tst r0                ; Check if the string has reached the terminating char ("string" , 0x00 <--)
-	breq done
-	swap r0               ; Prepare and send high nibble
-	out PORTC, r0        
-	rcall strobe_lcd
-	rcall delay_100
-	swap r0               ; Prepare and send low nibble
-	out PORTC, r0
-	rcall strobe_lcd
-	rcall delay_100
-	rjmp send_string
-done:
+DisplayCString:
+	lpm             ; r0 <-- first byte
+	swap r0         ; Upper nibble in place
+	out PORTC,r0    ; Send upper nibble out
+	rcall LCDStrobe ; Latch nibble
+	rcall Delay100  ; Wait
+	swap r0         ; Lower nibble in place
+	out PORTC,r0    ; Send lower nibble out
+	rcall LCDStrobe ; Latch nibble
+	rcall Delay100  ; Wait
+	adiw zl,1       ; Increment Z pointer
+	dec STRLEN      ; Repeat until all characters are out
+	brne DisplayCString       
 	ret
 
+DisplayDString:
+	
+	ld r0,Z+
+ 	tst r0 				; Reached end of message ?
+	breq done_dsd 		; Yes => quit
+	swap r0 			; Upper nibble in place
+	out PORTC,r0 		; Send upper nibble out
+	rcall LCDStrobe 	; Latch nibble
+	swap r0 			; Lower nibble in place
+	out PORTC,r0 		; Send lower nibble out
+	rcall LCDStrobe 	; Latch nibble
+	rjmp DisplayDString
+done_dsd:
+    ret
 
-load_voltage:				    ; Loads the voltage string from static memory
+LoadVoltage:		
+	; Load 'Voltmeter' and display		    
 	ldi r30, LOW(2*volt_msg)
 	ldi r31, 2*HIGH(volt_msg)
-	rjmp send_string
-
-load_freq:                      ; Loads the frequency string from static memory
-	ldi r30, LOW(2*freq_msg)
-	ldi r31, 2*HIGH(freq_msg)
+	ldi STRLEN, 0xA
+	rcall DisplayCString
+	rcall SecondLine
+	; Load 'V =' and display
+	ldi r30, LOW(2*volt_bot)
+	ldi r31, 2*HIGH(volt_bot)
+	ldi STRLEN, 0x4
+	rcall DisplayCString
+	; Get Voltage, format it, store it in SRAM and display it
+	rcall GetVoltage
+	rcall DisplayDString
+	; Load "V" and display
+	ldi r30, LOW(2*volt_units)
+	ldi r31, 2*HIGH(volt_units)
 	ret
 
-; Control Line Functions
-;--------------------------------------------------------------------------------
 
-strobe_lcd:
+LoadFreq:    
+	; Load "Frequency" and display                  
+	ldi r30, LOW(2*freq_msg)
+	ldi r31, 2*HIGH(freq_msg)
+	ldi STRLEN, 0xA
+	rcall DisplayCString
+	rcall SecondLine
+	; Load "F =" and display
+	ldi r30, LOW(2*freq_bot)
+	ldi r31, 2*HIGH(freq_bot)
+	ldi STRLEN, 0x4
+	rcall DisplayCString
+	; Get Frequency, format it, store it in SRAM and display it
+	rcall GetFrequency
+	rcall DisplayDString
+	; Load "F" and display
+	ldi r30, LOW(2*freq_units)
+	ldi r31, 2*HIGH(freq_units)
+
+	ret
+
+;--------------------------
+; Control Line Functions
+;--------------------------
+
+StrobeLCD:
 	sbi PORTB, 4
-	rcall delay_40_micro  
+	rcall Delay40u 
 	cbi PORTB, 4
 	ret
 
@@ -226,8 +266,100 @@ strobe_lcd:
 ;                                  Delays/Helpers                                     ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-delay_100:
+;----------------
+; ADC Functions
+;----------------
+
+GetVoltage:
+
+
+
+
+
+
+
+
+
+	mov dd16uL, r25 ; LSB of number to display
+	mov dd16uH, r26 ; MSB of number to display
+
+	ldi dv16uL,low(10)
+	ldi dv16uH,high(10)
+
+	; Store terminating for the string.
+	ldi TMP,0x00 ; Terminating NULL
+	sts dtxt+4, TMP ; Store in RAM
+	; Divide the number by 10 and format remainder.
+	rcall div16u ; Result: r17:r16, rem: r15:r14
+	ldi TMP, 0x30
+	add drem16uL, TMP ; Convert to ASCII
+	sts dtxt+3,drem16uL ; Store in RAM
+	; Generate decimal point.
+	ldi TMP,0x2e ; ASCII code for .
+	sts dtxt+2,TMP ; Store in RAM
+
 	ret
 
-delay_40_micro:
+GetFreq:
+
+	.dseg
+	dtxt: .DB 0x00,0x00,0x00,0x00,0x00,0x00
+	.cseg
+
+	; HERE NEED TO READ IN FREQUENCY
+
+	mov dd16uL,r25 ; LSB of number to display
+	mov dd16uH,r26 ; MSB of number to display
+
+	ldi dv16uL,low(10)
+	ldi dv16uH,high(10)
+	; Store terminating for the string.
+	ldi r20,0x00 ; Terminating NULL
+	sts dtxt+4,r20 ; Store in RAM
+	; Divide the number by 10 and format remainder.
+	rcall div16u ; Result: r17:r16, rem: r15:r14
+	ldi r20,0x30
+	add r14,r20 ; Convert to ASCII
+	sts dtxt+3,r14 ; Store in RAM
+	; Generate decimal point.
+	ldi r20,0x2e ; ASCII code for .
+	sts dtxt+2,r20 ; Store in RAM
+
 	ret
+
+;-----------
+; Delays
+;-----------
+
+Delay100:
+	ret
+
+Delay40u:
+	ret
+
+;   Division 
+;-------------------
+
+div16u:	
+	clr	drem16uL				; clear remainder Low byte
+	sub	drem16uH,drem16uH		; clear remainder High byte and carry
+	ldi	dcnt16u, 17				; init loop counter
+	d16u_1:	
+	rol	dd16uL		        	; shift left dividend
+	rol	dd16uH
+	dec	dcnt16u		            ; decrement counter
+	brne	d16u_2		        ; if done
+	ret			                ; return
+	d16u_2:	
+	rol	drem16uL				; shift dividend into remainder
+	rol	drem16uH
+	sub	drem16uL,dv16uL			; remainder = remainder - divisor
+	sbc	drem16uH,dv16uH	
+	brcc	d16u_3				; if result negative
+	add	drem16uL,dv16uL			; restore remainder
+	adc	drem16uH,dv16uH
+	clc							; clear carry to be shifted into result
+	rjmp	d16u_1				; else
+	d16u_3:	
+	sec							; set carry to be shifted into result
+	rjmp	d16u_1
